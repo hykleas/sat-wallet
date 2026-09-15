@@ -8,6 +8,7 @@ import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } 
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AccountSwitcher } from '@/components/AccountSwitcher';
 import { ActionBar } from '@/components/ActionBar';
 import { ActivityFeed } from '@/components/ActivityFeed';
 import { AddressBadge } from '@/components/AddressBadge';
@@ -39,10 +40,12 @@ export default function Home() {
   const portfolio = usePortfolio();
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<Tab>('tokens');
-  const [sheet, setSheet] = useState<'buy' | null>(null);
+  const [sheet, setSheet] = useState<'buy' | 'accounts' | null>(null);
   const [airdropping, setAirdropping] = useState(false);
 
   if (!address) return <Screen />;
+
+  const accountLabel = w.accounts.find((a) => a.index === w.activeAccount)?.label ?? 'Hesap';
 
   const hide = prefs.hideBalance;
   const devnet = prefs.network === 'devnet';
@@ -86,15 +89,16 @@ export default function Home() {
 
       {/* Üst çubuk: kimlik + ağ + ayarlar */}
       <View style={st.top}>
-        <View style={st.identity}>
-          <PressableScale onPress={() => router.push('/settings')} scaleTo={0.92} accessibilityLabel="Hesap ayarları">
-            <Avatar address={address} size={36} />
-          </PressableScale>
+        <PressableScale onPress={() => setSheet('accounts')} scaleTo={0.96} style={st.identity} accessibilityLabel="Hesap değiştir">
+          <Avatar address={address} size={36} />
           <View style={{ gap: 1 }}>
-            <Text style={st.accountName}>Hesap 1</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Text style={st.accountName}>{accountLabel}</Text>
+              {w.accounts.length > 1 && <Ionicons name="chevron-down" size={13} color={C.muted} />}
+            </View>
             <AddressBadge address={address} plain />
           </View>
-        </View>
+        </PressableScale>
         <View style={st.topRight}>
           <NetworkSwitcher network={prefs.network} onChange={(network) => w.updatePrefs({ network })} />
           <IconButton icon="settings-outline" onPress={() => router.push('/settings')} accessibilityLabel="Ayarlar" />
@@ -227,6 +231,8 @@ export default function Home() {
       </ScrollView>
 
       <TabBar value={tab} items={TABS} onChange={setTab} />
+
+      <AccountSwitcher visible={sheet === 'accounts'} onClose={() => setSheet(null)} />
 
       <Sheet visible={sheet === 'buy'} onClose={() => setSheet(null)} title="SOL satın al">
         <View style={{ gap: 4 }}>

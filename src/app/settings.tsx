@@ -4,9 +4,10 @@ import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
+import { AccountSwitcher } from '@/components/AccountSwitcher';
 import { Avatar } from '@/components/brand';
 import { SeedGrid } from '@/components/SeedGrid';
-import { Header, Notice, Screen, Segmented, tap, type IconName } from '@/components/ui';
+import { Header, Notice, PressableScale, Screen, Segmented, tap, type IconName } from '@/components/ui';
 import { useWallet } from '@/context/WalletContext';
 import { hasDeviceLock } from '@/lib/auth';
 import { shortAddress } from '@/lib/format';
@@ -19,6 +20,8 @@ export default function Settings() {
   const w = useWallet();
   const [seed, setSeed] = useState<string[] | null>(null);
   const [deviceLock, setDeviceLock] = useState(true);
+  const [accountsOpen, setAccountsOpen] = useState(false);
+  const accountLabel = w.accounts.find((a) => a.index === w.activeAccount)?.label ?? 'Hesap';
 
   useEffect(() => {
     hasDeviceLock().then(setDeviceLock);
@@ -56,12 +59,15 @@ export default function Settings() {
       <Header title="Ayarlar" />
       <ScrollView contentContainerStyle={st.body}>
         {w.address && (
-          <View style={st.profile}>
+          <PressableScale onPress={() => setAccountsOpen(true)} style={st.profile} accessibilityLabel="Hesapları yönet">
             <Avatar address={w.address} size={64} />
-            <Text style={st.profileName}>Hesap 1</Text>
+            <Text style={st.profileName}>{accountLabel}</Text>
             <Text style={st.profileAddr}>{shortAddress(w.address, 6)}</Text>
-          </View>
+            {w.accounts.length > 1 && <Text style={st.profileCount}>{w.accounts.length} hesap · değiştirmek için dokun</Text>}
+          </PressableScale>
         )}
+
+        <AccountSwitcher visible={accountsOpen} onClose={() => setAccountsOpen(false)} />
 
         {!deviceLock && (
           <Notice tone="danger">Telefonunda ekran kilidi yok. Sat, gönderimleri Face ID / parmak izi / PIN ile korur — lütfen bir kilit ayarla.</Notice>
@@ -182,6 +188,7 @@ const st = StyleSheet.create({
   profile: { alignItems: 'center', gap: 6, paddingVertical: 8 },
   profileName: { color: C.text, fontSize: 20, fontFamily: F.bold, marginTop: 8 },
   profileAddr: { color: C.muted, fontSize: 14, fontFamily: F.medium },
+  profileCount: { color: C.faint, fontSize: 12, fontFamily: F.medium, marginTop: 4 },
   sectionTitle: { color: C.muted, fontSize: 13, fontFamily: F.semibold, paddingHorizontal: 8 },
   section: { backgroundColor: C.surface, borderRadius: 20, overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, borderColor: C.border },
   row: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, minHeight: 56, paddingVertical: 10 },

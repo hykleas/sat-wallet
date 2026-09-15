@@ -8,7 +8,7 @@
     "scheme": "satwallet",
     "userInterfaceStyle": "dark",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/images/icon.png"
     },
     "android": {
       "adaptiveIcon": {
@@ -38,6 +38,12 @@
         "expo-local-authentication",
         {
           "faceIDPermission": "Cüzdanını açmak ve işlemleri onaylamak için Face ID kullanılır."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Alıcı adresini QR koddan okumak için kameraya erişim gerekir."
         }
       ]
     ],

@@ -43,6 +43,7 @@ function Root() {
         <Stack.Screen name="welcome" options={{ animation: 'fade' }} />
         <Stack.Screen name="home" options={{ animation: 'fade', gestureEnabled: false }} />
         <Stack.Screen name="receive" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="scan" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
       </Stack>
       {status === 'locked' && <LockScreen />}
       <StatusBar style="light" />

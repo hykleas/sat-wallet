@@ -10,9 +10,10 @@ import { useWallet } from '@/context/WalletContext';
 import { C, F, MONO, R } from '@/theme';
 
 export default function Receive() {
-  const { address, prefs } = useWallet();
+  const { address, prefs, accounts, activeAccount } = useWallet();
   const [copied, setCopied] = useState(false);
   if (!address) return <Screen />;
+  const accountLabel = accounts.find((a) => a.index === activeAccount)?.label ?? 'Hesap';
 
   // 4'lü gruplar: karşı tarafla sesli/görsel karşılaştırması kolay olsun.
   const grouped = address.match(/.{1,4}/g)?.join(' ') ?? address;
@@ -32,7 +33,7 @@ export default function Receive() {
         <View style={st.qrCard}>
           <View style={st.qrHead}>
             <Avatar address={address} size={26} />
-            <Text style={st.qrName}>Hesap 1</Text>
+            <Text style={st.qrName}>{accountLabel}</Text>
             <View style={st.netChip}>
               <ChainIcon chain="solana" size={14} />
               <Text style={st.netText}>{prefs.network === 'devnet' ? 'Devnet' : 'Solana'}</Text>

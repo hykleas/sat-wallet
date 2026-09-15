@@ -4,7 +4,7 @@ import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { FadeIn, ZoomIn } from 'react-native-reanimated';
 
@@ -18,6 +18,7 @@ import { usePortfolio } from '@/hooks/usePortfolio';
 import { confirmUser } from '@/lib/auth';
 import { errorMessage, formatFiat, formatRaw, formatSol, formatUnits, parseUnits, shortAddress } from '@/lib/format';
 import { SOL_MINT } from '@/lib/jupiter';
+import { setScanListener } from '@/lib/scanBridge';
 import {
   TOKEN_TRANSFER_UNITS,
   explorerTx,
@@ -54,6 +55,14 @@ export default function Send() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [signature, setSignature] = useState<string | null>(null);
+
+  useEffect(() => {
+    setScanListener((addr) => {
+      setTo(addr);
+      setError(null);
+    });
+    return () => setScanListener(null);
+  }, []);
 
   const holding = assetKey === 'SOL' ? null : (w.tokens.find((t) => t.mint === assetKey) ?? null);
   const asset = assets.find((a) => a.key === (holding ? holding.mint : 'SOL')) ?? assets[0];
@@ -280,14 +289,19 @@ export default function Send() {
           />
         )}
         {!recipientValid && (
-          <PressableScale
-            onPress={async () => {
-              const clip = (await Clipboard.getStringAsync()).trim();
-              if (clip) setTo(clip);
-            }}
-            style={st.pasteChip}>
-            <Text style={st.pasteText}>Yapıştır</Text>
-          </PressableScale>
+          <>
+            <PressableScale onPress={() => router.push('/scan')} style={st.scanChip} accessibilityLabel="QR kod tara">
+              <Ionicons name="qr-code-outline" size={18} color={C.text} />
+            </PressableScale>
+            <PressableScale
+              onPress={async () => {
+                const clip = (await Clipboard.getStringAsync()).trim();
+                if (clip) setTo(clip);
+              }}
+              style={st.pasteChip}>
+              <Text style={st.pasteText}>Yapıştır</Text>
+            </PressableScale>
+          </>
         )}
       </View>
 
@@ -376,6 +390,7 @@ const st = StyleSheet.create({
   addrInput: { flex: 1, color: C.text, fontSize: 14.5, fontFamily: MONO, height: '100%' },
   recipientChosen: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingRight: 10 },
   recipientText: { flex: 1, color: C.text, fontSize: 15, fontFamily: F.semibold },
+  scanChip: { width: 40, height: 40, borderRadius: 11, backgroundColor: C.surface3, alignItems: 'center', justifyContent: 'center' },
   pasteChip: { paddingHorizontal: 12, height: 40, borderRadius: 11, backgroundColor: C.surface3, justifyContent: 'center' },
   pasteText: { color: C.text, fontFamily: F.semibold, fontSize: 13.5 },
   amountArea: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },

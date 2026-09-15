@@ -13,11 +13,19 @@ export const newMnemonic = () => generateMnemonic(wordlist, 128); // 12 kelime
 export const isValidMnemonic = (m: string) => validateMnemonic(normalizeMnemonic(m), wordlist);
 
 /**
- * Phantom / Solflare / Backpack ile aynı türetme yolu: m/44'/501'/{hesap}'/0'.
- * Aynı 12 kelime bu uygulamada da aynı adresi verir.
- * PBKDF2 (2048 tur) telefonda birkaç yüz ms bloklar; açılışta bir kez çağır.
+ * PBKDF2 (2048 tur) telefonda birkaç yüz ms bloklar; kilit açılışında bir kez çağrılıp
+ * seed bellekte tutulmalı — hesap değiştirmek bu maliyeti tekrar ödememeli.
  */
-export function keypairFromMnemonic(m: string, account = 0): Keypair {
-  const seed = mnemonicToSeedSync(normalizeMnemonic(m));
+export const seedFromMnemonic = (m: string) => mnemonicToSeedSync(normalizeMnemonic(m));
+
+/**
+ * Phantom / Solflare / Backpack ile aynı türetme yolu: m/44'/501'/{hesap}'/0'.
+ * Aynı 12 kelime + aynı hesap indeksi bu uygulamada da aynı adresi verir.
+ */
+export function keypairFromSeed(seed: Uint8Array, account = 0): Keypair {
   return Keypair.fromSeed(deriveEd25519(seed, [44, 501, account, 0]));
+}
+
+export function keypairFromMnemonic(m: string, account = 0): Keypair {
+  return keypairFromSeed(seedFromMnemonic(m), account);
 }

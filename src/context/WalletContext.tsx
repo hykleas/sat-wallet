@@ -8,16 +8,20 @@ import { getNfts, type Nft } from '@/lib/nft';
 import { getPrices, getTokenMarkets, type Prices, type TokenMarket } from '@/lib/price';
 import { getActivity, getConnection, getHoldings, type Activity, type TokenHolding } from '@/lib/solana';
 import {
+  DEFAULT_ACCOUNTS,
   DEFAULT_PREFS,
+  loadAccounts,
   loadAddress,
   loadMnemonic,
   loadPrefs,
+  saveAccounts,
   savePrefs,
   saveWallet,
   wipeWallet,
+  type Account,
   type Prefs,
 } from '@/lib/storage';
-import { isValidMnemonic, keypairFromMnemonic, normalizeMnemonic } from '@/lib/wallet';
+import { isValidMnemonic, keypairFromSeed, normalizeMnemonic, seedFromMnemonic } from '@/lib/wallet';
 
 type Status = 'loading' | 'empty' | 'locked' | 'ready';
 
@@ -39,6 +43,8 @@ type WalletState = {
   prices: Prices | null;
   refreshing: boolean;
   error: string | null;
+  accounts: Account[];
+  activeAccount: number;
   setupWallet: (mnemonic: string) => Promise<void>;
   unlock: () => Promise<boolean>;
   refresh: () => Promise<void>;
@@ -46,6 +52,10 @@ type WalletState = {
   getSigner: () => Keypair;
   revealMnemonic: () => Promise<string | null>;
   resetWallet: () => Promise<void>;
+  switchAccount: (index: number) => void;
+  addAccount: (label?: string) => Account;
+  renameAccount: (index: number, label: string) => void;
+  addressForAccount: (index: number) => string | null;
 };
 
 const WalletContext = createContext<WalletState | null>(null);
@@ -67,14 +77,21 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [prices, setPrices] = useState<Prices | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [accounts, setAccounts] = useState<Account[]>(DEFAULT_ACCOUNTS.list);
+  const [activeAccount, setActiveAccount] = useState(DEFAULT_ACCOUNTS.active);
 
   const signer = useRef<Keypair | null>(null);
+  // PBKDF2 sonucu; kilit açıkken bellekte tutulur ki hesap değiştirmek her seferinde
+  // yüzlerce ms'lik yeniden türetmeyi tekrarlamasın.
+  const seed = useRef<Uint8Array | null>(null);
   const requestId = useRef(0);
 
   useEffect(() => {
     (async () => {
-      const [mnemonic, addr, p] = await Promise.all([loadMnemonic(), loadAddress(), loadPrefs()]);
+      const [mnemonic, addr, p, a] = await Promise.all([loadMnemonic(), loadAddress(), loadPrefs(), loadAccounts()]);
       setPrefs(p);
+      setAccounts(a.list);
+      setActiveAccount(a.active);
       if (mnemonic) {
         setAddress(addr);
         setStatus('locked');
@@ -88,10 +105,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     const mnemonic = normalizeMnemonic(raw);
     if (!isValidMnemonic(mnemonic)) throw new Error('Kurtarma ifadesi geçersiz. Kelimeleri ve sırasını kontrol et.');
     await nextFrame();
-    const kp = keypairFromMnemonic(mnemonic);
+    seed.current = seedFromMnemonic(mnemonic);
+    const kp = keypairFromSeed(seed.current, 0);
     const addr = kp.publicKey.toBase58();
     await saveWallet(mnemonic, addr);
+    await saveAccounts(DEFAULT_ACCOUNTS);
     signer.current = kp;
+    setAccounts(DEFAULT_ACCOUNTS.list);
+    setActiveAccount(0);
     setAddress(addr);
     setStatus('ready');
   }, []);
@@ -104,11 +125,56 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       return false;
     }
     await nextFrame();
-    const kp = keypairFromMnemonic(mnemonic);
+    seed.current = seedFromMnemonic(mnemonic);
+    const a = await loadAccounts();
+    setAccounts(a.list);
+    setActiveAccount(a.active);
+    const kp = keypairFromSeed(seed.current, a.active);
     signer.current = kp;
     setAddress(kp.publicKey.toBase58());
     setStatus('ready');
     return true;
+  }, []);
+
+  const activate = useCallback((list: Account[], index: number) => {
+    if (!seed.current) return;
+    const kp = keypairFromSeed(seed.current, index);
+    signer.current = kp;
+    setActiveAccount(index);
+    setAddress(kp.publicKey.toBase58());
+    saveAccounts({ list, active: index });
+  }, []);
+
+  const switchAccount = useCallback((index: number) => activate(accounts, index), [accounts, activate]);
+
+  const addAccount = useCallback(
+    (label?: string) => {
+      const nextIndex = accounts.reduce((m, a) => Math.max(m, a.index), -1) + 1;
+      const account: Account = { index: nextIndex, label: label?.trim() || `Hesap ${nextIndex + 1}` };
+      const list = [...accounts, account];
+      setAccounts(list);
+      activate(list, nextIndex);
+      return account;
+    },
+    [accounts, activate],
+  );
+
+  const renameAccount = useCallback(
+    (index: number, label: string) => {
+      const trimmed = label.trim();
+      if (!trimmed) return;
+      setAccounts((cur) => {
+        const list = cur.map((a) => (a.index === index ? { ...a, label: trimmed } : a));
+        saveAccounts({ list, active: activeAccount });
+        return list;
+      });
+    },
+    [activeAccount],
+  );
+
+  const addressForAccount = useCallback((index: number) => {
+    if (!seed.current) return null;
+    return keypairFromSeed(seed.current, index).publicKey.toBase58();
   }, []);
 
   useEffect(() => {
@@ -118,6 +184,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       else if (s === 'active' && hiddenAt) {
         if (Date.now() - hiddenAt > AUTO_LOCK_MS) {
           signer.current = null;
+          seed.current = null;
           setStatus((cur) => (cur === 'ready' ? 'locked' : cur));
         }
         hiddenAt = 0;
@@ -219,6 +286,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const resetWallet = useCallback(async () => {
     await wipeWallet();
     signer.current = null;
+    seed.current = null;
     requestId.current++;
     setAddress(null);
     setLamports(null);
@@ -226,6 +294,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setMarkets({});
     setNfts(null);
     setActivity(null);
+    setAccounts(DEFAULT_ACCOUNTS.list);
+    setActiveAccount(DEFAULT_ACCOUNTS.active);
     setStatus('empty');
   }, []);
 
@@ -245,6 +315,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         prices,
         refreshing,
         error,
+        accounts,
+        activeAccount,
         setupWallet,
         unlock,
         refresh,
@@ -252,6 +324,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         getSigner,
         revealMnemonic,
         resetWallet,
+        switchAccount,
+        addAccount,
+        renameAccount,
+        addressForAccount,
       }}>
       {children}
     </WalletContext.Provider>

@@ -24,11 +24,17 @@ const KEYS = {
   mnemonic: 'sat_mnemonic',
   address: 'sat_address', // gizli değil; kilit ekranının arkasında bakiyeyi önceden yüklemek için
   prefs: 'sat_prefs',
+  accounts: 'sat_accounts',
 } as const;
 
 export type Currency = 'USD' | 'TRY';
 export type Prefs = { network: Network; currency: Currency; hideBalance: boolean };
 export const DEFAULT_PREFS: Prefs = { network: 'mainnet', currency: 'USD', hideBalance: false };
+
+/** Aynı mnemonic'ten türeyen hesaplar; `index` = m/44'/501'/{index}'/0' türetme yolu. */
+export type Account = { index: number; label: string };
+export type AccountsData = { list: Account[]; active: number };
+export const DEFAULT_ACCOUNTS: AccountsData = { list: [{ index: 0, label: 'Hesap 1' }], active: 0 };
 
 export async function saveWallet(mnemonic: string, address: string) {
   await store.set(KEYS.mnemonic, mnemonic, SECRET);
@@ -41,7 +47,21 @@ export const loadAddress = () => store.get(KEYS.address);
 export async function wipeWallet() {
   await store.del(KEYS.mnemonic, SECRET);
   await store.del(KEYS.address);
+  await store.del(KEYS.accounts);
 }
+
+export async function loadAccounts(): Promise<AccountsData> {
+  try {
+    const raw = await store.get(KEYS.accounts);
+    if (!raw) return DEFAULT_ACCOUNTS;
+    const parsed = JSON.parse(raw) as AccountsData;
+    return parsed.list?.length ? parsed : DEFAULT_ACCOUNTS;
+  } catch {
+    return DEFAULT_ACCOUNTS;
+  }
+}
+
+export const saveAccounts = (a: AccountsData) => store.set(KEYS.accounts, JSON.stringify(a));
 
 export async function loadPrefs(): Promise<Prefs> {
   try {
